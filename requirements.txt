@@ -1,0 +1,14 @@
+streamlit
+openai-whisper
+mediapipe
+opencv-python
+yt-dlp
+librosa
+numpy
+moviepy
+transformers
+fpdf
+gdown
+torch
+scipy
+requests
