@@ -1,0 +1,8 @@
+__pycache__/
+*.mp4
+*.wav
+*.mp3
+*.pdf
+temp_*
+venv/
+.DS_Store
