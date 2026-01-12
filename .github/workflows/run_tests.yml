@@ -29,7 +29,7 @@ jobs:
     - name: Install Dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install openai-whisper librosa numpy "moviepy<2.0.0" scipy
+        pip install openai-whisper librosa numpy "moviepy<1.0.3" scipy
     # 5. Create a Dummy Video for Testing (Because we don't upload large videos)
     - name: Create Dummy Video
       run: |
