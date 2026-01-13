@@ -12,6 +12,7 @@ import librosa
 import numpy as np
 import mediapipe as mp
 import gdown
+import pytesseract
 from moviepy.editor import VideoFileClip
 from transformers import pipeline
 from fpdf import FPDF
@@ -47,36 +48,24 @@ class VideoDownloader:
 class SpeechAnalyzer:
     def __init__(self):
         self.whisper_model = whisper.load_model("tiny", device=DEVICE)
-        try:
-            self.sentiment_pipeline = pipeline("sentiment-analysis", model="distilbert-base-uncased-finetuned-sst-2-english")
-        except:
-            self.sentiment_pipeline = None
 
     def analyze_prosody(self, audio_path):
         y, sr = librosa.load(audio_path)
-        
         rms = librosa.feature.rms(y=y)[0]
-        avg_volume = np.mean(rms)
-        vol_score = min(max(avg_volume / 0.05, 0), 1) * 100 
+        vol_score = min(max(np.mean(rms) / 0.05, 0), 1) * 100 
         
-        non_silent_intervals = librosa.effects.split(y, top_db=25)
-        total_duration = librosa.get_duration(y=y, sr=sr)
-        non_silent_duration = sum([(end - start) / sr for start, end in non_silent_intervals])
-        
-        pause_ratio = 1.0 - (non_silent_duration / total_duration) if total_duration > 0 else 0
+        non_silent = librosa.effects.split(y, top_db=25)
+        total_dur = librosa.get_duration(y=y, sr=sr)
+        active_dur = sum([(end - start) / sr for start, end in non_silent])
+        pause_ratio = 1.0 - (active_dur / total_dur) if total_dur > 0 else 0
         
         pitches, magnitudes = librosa.piptrack(y=y, sr=sr)
         mask = magnitudes > np.median(magnitudes)
         active_pitches = pitches[mask]
-        valid_pitches = active_pitches[(active_pitches > 70) & (active_pitches < 400)]
+        valid = active_pitches[(active_pitches > 70) & (active_pitches < 400)]
+        pitch_std = np.std(valid) if len(valid) > 0 else 0
         
-        pitch_std = np.std(valid_pitches) if len(valid_pitches) > 0 else 0
-        
-        return {
-            "volume_score": round(vol_score, 1),
-            "pause_ratio": round(pause_ratio * 100, 1),
-            "pitch_variation": round(float(pitch_std), 2)
-        }
+        return {"volume_score": round(vol_score, 1), "pause_ratio": round(pause_ratio*100, 1), "pitch_variation": round(float(pitch_std), 2)}
 
     def process_audio(self, video_path):
         audio_path = "temp_audio.wav"
@@ -85,13 +74,11 @@ class SpeechAnalyzer:
             duration = video.duration
             video.audio.write_audiofile(audio_path, codec='pcm_s16le', verbose=False, logger=None)
             video.close()
-        except Exception as e:
-            return None
+        except: return None
 
         try:
             result = self.whisper_model.transcribe(audio_path)
             transcript = result["text"]
-            
             words = transcript.split()
             wpm = round(len(words) / (duration / 60), 1) if duration > 0 else 0
             
@@ -100,222 +87,289 @@ class SpeechAnalyzer:
             
             physics = self.analyze_prosody(audio_path)
             
-            stopwords = set(["the", "and", "is", "of", "to", "a", "in", "that", "it", "for", "on", "with", "as", "was", "at", "um", "uh", "like", "actually", "so", "you", "my"])
-            clean_words = [w.lower() for w in re.findall(r'\b\w+\b', transcript) if len(w) > 3]
-            word_counts = {}
-            for w in clean_words:
-                if w not in stopwords:
-                    word_counts[w] = word_counts.get(w, 0) + 1
-            topics = [k.title() for k, v in sorted(word_counts.items(), key=lambda item: item[1], reverse=True)[:5]]
-
             if os.path.exists(audio_path): os.remove(audio_path)
-
-            return {
-                "transcript": transcript,
-                "wpm": wpm,
-                "filler_count": filler_count,
-                "physics": physics,
-                "topics": topics
-            }
-
-        except Exception as e:
+            return {"transcript": transcript, "wpm": wpm, "filler_count": filler_count, "physics": physics}
+        except:
             if os.path.exists(audio_path): os.remove(audio_path)
             return None
 
 class VisualAnalyzer:
     def __init__(self):
         self.mp_holistic = mp.solutions.holistic
-        self.holistic = self.mp_holistic.Holistic(min_detection_confidence=0.5, min_tracking_confidence=0.5)
+        self.holistic = self.mp_holistic.Holistic(min_detection_confidence=0.5)
 
     def analyze_video(self, video_path):
         cap = cv2.VideoCapture(video_path)
-        total_frames = 0
-        analyzed_frames = 0
-        eye_contact_frames = 0
-        good_posture_frames = 0
+        analyzed = 0
+        eye_contact = 0
+        posture = 0
+        face_detected_frames = 0
         
+        frame_count = 0
         while cap.isOpened():
             ret, frame = cap.read()
             if not ret: break
             
-            if total_frames % 10 == 0:
-                analyzed_frames += 1
+            if frame_count % 15 == 0:
+                analyzed += 1
                 try:
-                    image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                    results = self.holistic.process(image)
+                    img = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                    results = self.holistic.process(img)
                     
                     if results.face_landmarks:
-                        nose_x = results.face_landmarks.landmark[1].x
-                        left_cheek_x = results.face_landmarks.landmark[234].x
-                        right_cheek_x = results.face_landmarks.landmark[454].x
-                        face_center = (left_cheek_x + right_cheek_x) / 2
-                        if abs(nose_x - face_center) < 0.05:
-                            eye_contact_frames += 1
+                        face_detected_frames += 1
+                        nose = results.face_landmarks.landmark[1].x
+                        cheeks = (results.face_landmarks.landmark[234].x + results.face_landmarks.landmark[454].x) / 2
+                        if abs(nose - cheeks) < 0.05: eye_contact += 1
 
                     if results.pose_landmarks:
-                        l_shldr_y = results.pose_landmarks.landmark[11].y
-                        r_shldr_y = results.pose_landmarks.landmark[12].y
-                        if abs(l_shldr_y - r_shldr_y) < 0.05:
-                            good_posture_frames += 1
-                except:
-                    pass
-            total_frames += 1
-
+                        shldr_diff = abs(results.pose_landmarks.landmark[11].y - results.pose_landmarks.landmark[12].y)
+                        if shldr_diff < 0.05: posture += 1
+                except: pass
+            frame_count += 1
         cap.release()
         
-        if analyzed_frames == 0: return {"eye_contact_score": 0, "posture_score": 0}
+        if analyzed == 0: return None
+
+        face_ratio = face_detected_frames / analyzed
+        is_slide_mode = face_ratio < 0.10
 
         return {
-            "eye_contact_score": round((eye_contact_frames / analyzed_frames) * 100, 1),
-            "posture_score": round((good_posture_frames / analyzed_frames) * 100, 1),
-            "hand_score": 50
+            "is_slide_mode": is_slide_mode,
+            "eye_contact_score": round((eye_contact/analyzed)*100, 1) if not is_slide_mode else 0,
+            "posture_score": round((posture/analyzed)*100, 1) if not is_slide_mode else 0
+        }
+
+class SlideAnalyzer:
+    def analyze_slides(self, video_path):
+        cap = cv2.VideoCapture(video_path)
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        total_text_density = []
+        slide_changes = 0
+        last_frame_hash = None
+        
+        frame_interval = int(fps * 2)
+        count = 0
+        
+        print("Scanning Slides for Text...")
+        while cap.isOpened():
+            ret, frame = cap.read()
+            if not ret: break
+            
+            if count % frame_interval == 0:
+                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                gray_small = cv2.resize(gray, (32, 32))
+                
+                text = pytesseract.image_to_string(gray)
+                word_count = len(text.split())
+                if word_count > 5:
+                    total_text_density.append(word_count)
+
+                curr_mean = np.mean(gray_small)
+                if last_frame_hash is not None:
+                    if abs(curr_mean - last_frame_hash) > 5:
+                        slide_changes += 1
+                last_frame_hash = curr_mean
+
+            count += 1
+        cap.release()
+
+        avg_words = sum(total_text_density) / len(total_text_density) if total_text_density else 0
+        
+        return {
+            "avg_words_per_slide": round(avg_words, 1),
+            "slide_changes": slide_changes,
+            "readability_score": max(100 - (avg_words * 0.5), 0)
         }
 
 class ModalXSystem:
     def __init__(self):
-        self.audio_engine = SpeechAnalyzer()
-        self.visual_engine = VisualAnalyzer()
+        self.audio = SpeechAnalyzer()
+        self.visual = VisualAnalyzer()
+        self.slides = SlideAnalyzer()
 
-    def calculate_score(self, audio, visual):
+    def calculate_score(self, audio, visual, slides=None):
         score = 100
         feedback = []
-
-        pause_ratio = audio['physics']['pause_ratio']
-        wpm = audio['wpm']
         
-        if wpm < 110:
-            if pause_ratio > 30:
-                score -= 10
-                feedback.append("Frequent hesitations detected. Try to flow more smoothly.")
-            else:
+        # Audio Scoring
+        if audio['wpm'] < 110: score -= 5; feedback.append("Audio: Speaking too slowly.")
+        elif audio['wpm'] > 170: score -= 5; feedback.append("Audio: Speaking too fast.")
+        
+        if audio['physics']['pause_ratio'] > 30: 
+            score -= 10
+            feedback.append("Audio: Frequent hesitations detected.")
+
+        if audio['physics']['pitch_variation'] < 15:
+            score -= 5
+            feedback.append("Audio: Voice is monotone.")
+
+        # Visual/Slide Scoring
+        if visual['is_slide_mode'] and slides:
+            feedback.append("Mode: Slide Presentation Detected.")
+            if slides['avg_words_per_slide'] > 60:
+                score -= 15
+                feedback.append(f"Visual: Slides are cluttered ({slides['avg_words_per_slide']} words/slide).")
+            elif slides['avg_words_per_slide'] < 10:
                 score -= 5
-                feedback.append("Speaking pace is slow. Try to increase energy.")
-        elif wpm > 170:
-            score -= 10
-            feedback.append("Speaking very fast. Ensure you aren't rushing.")
+                feedback.append("Visual: Slides seem empty.")
+            else:
+                feedback.append("Visual: Good text density.")
+            
+            if slides['slide_changes'] < 3:
+                score -= 10
+                feedback.append("Visual: Low slide variety.")
         else:
-            feedback.append("Good speaking pace.")
-
-        vol = audio['physics']['volume_score']
-        if vol < 30:
-            score -= 10
-            feedback.append("Volume is low. Project your voice for better confidence.")
-        
-        pitch_var = audio['physics']['pitch_variation']
-        if pitch_var < 15:
-            score -= 10
-            feedback.append("Voice sounds monotone. Vary your pitch to keep interest.")
-        
-        if audio['filler_count'] > 6:
-            score -= 5
-            feedback.append(f"Detected {audio['filler_count']} filler words. Pause instead.")
-
-        if visual['eye_contact_score'] < 60:
-            score -= 10
-            feedback.append("Low eye contact. Look at the camera.")
-        
-        if visual['posture_score'] < 80:
-            score -= 5
-            feedback.append("Improve posture. Keep shoulders steady.")
+            feedback.append("Mode: Presenter Detected.")
+            if visual['eye_contact_score'] < 60: score -= 10; feedback.append("Body: Low eye contact.")
+            if visual['posture_score'] < 80: score -= 5; feedback.append("Body: Unstable posture.")
 
         return max(0, score), feedback
 
-    def generate_pdf(self, metrics, score, feedback, student_name, student_id):
+    def generate_pdf(self, metrics, score, feedback, s_name, s_id):
         pdf = FPDF()
         pdf.add_page()
         
-        pdf.set_font("Arial", "B", 20)
-        pdf.cell(0, 20, "Presentation Assessment Report", ln=True, align="C")
-        pdf.set_font("Arial", "", 12)
-        pdf.cell(0, 10, "DIU Smart Faculty Grader", ln=True, align="C")
-        pdf.line(10, 35, 200, 35)
+        # --- 1. HEADER DESIGN ---
+        # Dark Blue Background
+        pdf.set_fill_color(24, 40, 72)
+        pdf.rect(0, 0, 210, 40, 'F')
         
-        pdf.ln(10)
+        pdf.set_font("Arial", "B", 22)
+        pdf.set_text_color(255, 255, 255)
+        pdf.set_y(15)
+        pdf.cell(0, 10, "ModalX AI Assessment Report", ln=True, align="C")
+        
+        pdf.set_font("Arial", "", 10)
+        pdf.cell(0, 8, "Automated Multi-Modal Presentation Analysis", ln=True, align="C")
+        
+        # --- 2. STUDENT INFO BOX ---
+        pdf.ln(20)
+        pdf.set_text_color(0, 0, 0)
+        pdf.set_fill_color(240, 240, 240) # Light Gray
+        pdf.rect(10, 50, 190, 25, 'F')
+        
+        pdf.set_y(55)
         pdf.set_font("Arial", "B", 12)
-        pdf.cell(40, 10, f"Student Name:", border=0)
+        pdf.set_x(15)
+        pdf.cell(35, 8, "Student Name:", 0)
         pdf.set_font("Arial", "", 12)
-        pdf.cell(0, 10, f"{student_name}", ln=True)
+        pdf.cell(60, 8, s_name, 0)
         
-        pdf.cell(40, 10, f"Student ID:", border=0)
-        pdf.cell(0, 10, f"{student_id}", ln=True)
+        pdf.set_font("Arial", "B", 12)
+        pdf.cell(25, 8, "Date:", 0)
+        pdf.set_font("Arial", "", 12)
+        pdf.cell(40, 8, datetime.now().strftime('%Y-%m-%d'), 0, 1)
         
-        pdf.cell(40, 10, f"Date:", border=0)
-        pdf.cell(0, 10, f"{datetime.now().strftime('%Y-%m-%d %H:%M')}", ln=True)
+        pdf.set_x(15)
+        pdf.set_font("Arial", "B", 12)
+        pdf.cell(35, 8, "Student ID:", 0)
+        pdf.set_font("Arial", "", 12)
+        pdf.cell(60, 8, s_id, 0)
 
+        # --- 3. GRADE & SCORE ---
         letter_grade = "F"
-        if score >= 80: letter_grade = "A+ (Outstanding)"
-        elif score >= 75: letter_grade = "A (Excellent)"
-        elif score >= 70: letter_grade = "A- (Very Good)"
-        elif score >= 65: letter_grade = "B+ (Good)"
-        elif score >= 60: letter_grade = "B (Satisfactory)"
-        else: letter_grade = "C (Needs Improvement)"
-
-        pdf.ln(10)
-        pdf.set_fill_color(240, 240, 240)
-        pdf.rect(10, pdf.get_y(), 190, 30, 'F')
+        color = (220, 53, 69) # Red
+        if score >= 80: letter_grade, color = "A+", (25, 135, 84) # Green
+        elif score >= 70: letter_grade, color = "A", (13, 202, 240) # Cyan
+        elif score >= 60: letter_grade, color = "B", (255, 193, 7) # Yellow
+        
+        pdf.ln(20)
         pdf.set_font("Arial", "B", 16)
-        pdf.cell(0, 15, f"Final Score: {score}/100", ln=True, align="C")
+        pdf.cell(0, 10, "Executive Summary", ln=True)
+        pdf.line(10, pdf.get_y(), 200, pdf.get_y())
+        pdf.ln(5)
+        
+        # Score Box
+        pdf.set_fill_color(color[0], color[1], color[2])
+        pdf.rect(10, pdf.get_y(), 190, 25, 'F')
+        
+        pdf.set_y(pdf.get_y() + 5)
+        pdf.set_text_color(255, 255, 255)
         pdf.set_font("Arial", "B", 18)
-        pdf.cell(0, 15, f"Grade: {letter_grade}", ln=True, align="C")
-        
+        pdf.cell(95, 15, f"Final Score: {score}/100", 0, 0, 'C')
+        pdf.cell(95, 15, f"Grade: {letter_grade}", 0, 1, 'C')
+        pdf.set_text_color(0, 0, 0)
+
+        # --- 4. DETAILED METRICS WITH BARS ---
         pdf.ln(10)
         pdf.set_font("Arial", "B", 14)
-        pdf.cell(0, 10, "Performance Metrics:", ln=True)
-        pdf.set_font("Arial", "", 12)
+        pdf.cell(0, 10, "Detailed Performance Metrics", ln=True)
+        pdf.set_font("Arial", "", 10)
         
-        pdf.cell(100, 10, "Metric", border=1)
-        pdf.cell(90, 10, "Result", border=1, ln=True)
-        
-        pdf.cell(100, 10, "Speaking Pace (WPM)", border=1)
-        pdf.cell(90, 10, f"{metrics['audio']['wpm']}", border=1, ln=True)
-        
-        pdf.cell(100, 10, "Pitch Variation", border=1)
-        pdf.cell(90, 10, f"{metrics['audio']['physics']['pitch_variation']}", border=1, ln=True)
-        
-        pdf.cell(100, 10, "Eye Contact", border=1)
-        pdf.cell(90, 10, f"{metrics['visual']['eye_contact_score']}%", border=1, ln=True)
-        
+        # Helper to draw bars
+        def draw_metric(label, value_str, percent):
+            pdf.ln(6)
+            pdf.cell(50, 6, label, 0)
+            pdf.cell(30, 6, value_str, 0)
+            
+            # Background Bar (Gray)
+            x = pdf.get_x()
+            y = pdf.get_y()
+            pdf.set_fill_color(230, 230, 230)
+            pdf.rect(x, y+1, 80, 4, 'F')
+            
+            # Foreground Bar (Blue)
+            pdf.set_fill_color(70, 130, 180)
+            width = min(max(percent, 0), 100) * 0.8 # Scale to 80mm
+            if width > 0:
+                pdf.rect(x, y+1, width, 4, 'F')
+            pdf.ln(2)
+
+        # Audio Metrics
+        draw_metric("Speaking Pace", f"{metrics['audio']['wpm']} WPM", min(metrics['audio']['wpm']/150*100, 100))
+        draw_metric("Pitch Variation", f"{metrics['audio']['physics']['pitch_variation']}", min(metrics['audio']['physics']['pitch_variation']*2, 100))
+        draw_metric("Pause Ratio", f"{metrics['audio']['physics']['pause_ratio']}%", 100 - metrics['audio']['physics']['pause_ratio']) # Inverse is better
+
+        # Visual Metrics
+        if metrics['visual']['is_slide_mode'] and metrics['slides']:
+             draw_metric("Slide Readability", f"{int(metrics['slides']['readability_score'])}/100", metrics['slides']['readability_score'])
+             draw_metric("Text Density", f"{metrics['slides']['avg_words_per_slide']} words", max(100 - metrics['slides']['avg_words_per_slide'], 0))
+        else:
+             draw_metric("Eye Contact", f"{metrics['visual']['eye_contact_score']}%", metrics['visual']['eye_contact_score'])
+             draw_metric("Posture Stability", f"{metrics['visual']['posture_score']}%", metrics['visual']['posture_score'])
+
+        # --- 5. AI FEEDBACK SECTION ---
         pdf.ln(10)
         pdf.set_font("Arial", "B", 14)
-        pdf.cell(0, 10, "Faculty Feedback:", ln=True)
-        pdf.set_font("Arial", "", 12)
-        for tip in feedback:
-            clean_tip = tip.encode('latin-1', 'ignore').decode('latin-1')
-            pdf.multi_cell(0, 8, f"- {clean_tip}")
-
-        temp_filename = f"temp_{student_id}_{datetime.now().timestamp()}.pdf"
-        pdf.output(temp_filename)
+        pdf.cell(0, 10, "AI Generated Feedback & Recommendations", ln=True)
+        pdf.line(10, pdf.get_y(), 200, pdf.get_y())
+        pdf.ln(5)
         
-        with open(temp_filename, "rb") as f:
-            pdf_bytes = f.read()
-            
-        if os.path.exists(temp_filename):
-            os.remove(temp_filename)
-            
-        return pdf_bytes
+        pdf.set_font("Arial", "", 11)
+        for item in feedback:
+            pdf.cell(10, 8, ">>", 0, 0) 
+            pdf.multi_cell(0, 8, f"{item.encode('latin-1', 'ignore').decode('latin-1')}")
 
-    def analyze(self, input_path, student_name="Unknown", student_id="000", is_url=False):
-        video_path = input_path
-        if is_url:
-            video_path = VideoDownloader.download_from_url(input_path)
-            if not video_path: return None
+        # Footer
+        pdf.set_y(-20)
+        pdf.set_font("Arial", "I", 8)
+        pdf.set_text_color(128, 128, 128)
+        pdf.cell(0, 10, "Generated by ModalX | Daffodil International University", 0, 0, 'C')
 
-        audio_res = self.audio_engine.process_audio(video_path)
-        visual_res = self.visual_engine.analyze_video(video_path)
+        # Output
+        temp = f"temp_{s_id}.pdf"
+        pdf.output(temp)
+        with open(temp, "rb") as f: data = f.read()
+        if os.path.exists(temp): os.remove(temp)
+        return data
 
-        if not audio_res: return None
-        if not visual_res: visual_res = {"eye_contact_score": 0, "posture_score": 0}
+    def analyze(self, path, name, sid, is_url=False):
+        vid_path = path
+        if is_url: vid_path = VideoDownloader.download_from_url(path)
+        if not vid_path: return None
 
-        score, feedback = self.calculate_score(audio_res, visual_res)
-        all_metrics = {"audio": audio_res, "visual": visual_res}
+        aud_res = self.audio.process_audio(vid_path)
+        vis_res = self.visual.analyze_video(vid_path)
         
-        report_bytes = self.generate_pdf(all_metrics, score, feedback, student_name, student_id)
+        slide_res = None
+        if vis_res and vis_res['is_slide_mode']:
+            slide_res = self.slides.analyze_slides(vid_path)
 
-        if is_url and os.path.exists(video_path): os.remove(video_path)
+        score, feedback = self.calculate_score(aud_res, vis_res, slide_res)
+        metrics = {"audio": aud_res, "visual": vis_res, "slides": slide_res}
+        
+        report = self.generate_pdf(metrics, score, feedback, name, sid)
 
-        return {
-            "score": score,
-            "metrics": all_metrics,
-            "feedback": feedback,
-            "report": report_bytes
-        }
+        if is_url and os.path.exists(vid_path): os.remove(vid_path)
+        return {"score": score, "metrics": metrics, "feedback": feedback, "report": report}

@@ -25,37 +25,42 @@ st.markdown("""
     }
     
     .main-header {
-        background: linear-gradient(90deg, #4b6cb7 0%, #182848 100%);
-        padding: 20px;
-        border-radius: 15px;
+        background: linear-gradient(135deg, #4b6cb7 0%, #182848 100%);
+        padding: 25px;
+        border-radius: 12px;
         text-align: center;
-        margin-bottom: 20px;
+        margin-bottom: 25px;
         border: 1px solid #4b6cb7;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        box-shadow: 0 4px 20px rgba(0,0,0,0.6);
     }
     
     div[data-testid="stMetric"] {
-        background-color: #262730;
-        border: 1px solid #444;
+        background-color: #1E2130;
+        border: 1px solid #333;
         padding: 15px;
         border-radius: 10px;
-        transition: transform 0.2s;
+        transition: all 0.3s ease;
     }
     div[data-testid="stMetric"]:hover {
-        transform: scale(1.02);
-        border-color: #4b6cb7;
+        transform: translateY(-5px);
+        border-color: #0dcaf0;
+        box-shadow: 0 5px 15px rgba(13, 202, 240, 0.3);
     }
     div[data-testid="stMetric"] label { color: #AAAAAA !important; }
     div[data-testid="stMetric"] div[data-testid="stMetricValue"] { color: #FFFFFF !important; }
 
     .stTextInput input {
-        background-color: #262730;
+        background-color: #1E2130;
         color: white;
         border: 1px solid #444;
     }
-    
+    [data-testid="stSidebar"] {
+        background-color: #12151e;
+        border-right: 1px solid #333;
+    }
+
     div.stDownloadButton > button {
-        background: linear-gradient(45deg, #198754, #20c997);
+        background: linear-gradient(90deg, #198754, #20c997);
         color: white !important;
         border: none;
         width: 100%;
@@ -63,21 +68,22 @@ st.markdown("""
         font-size: 16px;
         font-weight: bold;
         border-radius: 8px;
-        box-shadow: 0 4px 10px rgba(25, 135, 84, 0.4);
+        box-shadow: 0 4px 12px rgba(32, 201, 151, 0.4);
+        transition: transform 0.2s;
     }
     div.stDownloadButton > button:hover {
-        opacity: 0.9;
-        transform: translateY(-1px);
+        transform: scale(1.02);
     }
-
-    [data-testid="stSidebar"] {
-        background-color: #161a24;
-        border-right: 1px solid #333;
+    
+    .stStatusWidget {
+        background-color: #1E2130;
+        border: 1px solid #444;
+        border-radius: 10px;
     }
     </style>
 """, unsafe_allow_html=True)
 
-st.markdown('<div class="main-header"><h1>🎓 DIU Smart Faculty Grader</h1><p>Automated Presentation Assessment System</p></div>', unsafe_allow_html=True)
+st.markdown('<div class="main-header"><h1>🎓 DIU Smart Faculty Grader</h1><p>AI-Powered Multi-Modal Presentation Assessment</p></div>', unsafe_allow_html=True)
 
 with st.sidebar:
     st.header("📋 Student Details")
@@ -85,21 +91,21 @@ with st.sidebar:
     s_id = st.text_input("Student ID", placeholder="e.g. 181-15-XXXX")
     st.markdown("---")
     
-    st.header("📂 Evidence Upload")
-    input_method = st.radio("Source:", ["Upload Video File", "Google Drive / YouTube Link"])
+    st.header("📂 Evidence Source")
+    input_method = st.radio("Choose Source:", ["Upload Video File", "Google Drive / YouTube Link"])
     
     video_path = None
     is_url = False
 
     if input_method == "Upload Video File":
-        uploaded_file = st.file_uploader("Select Presentation Video (MP4)", type=["mp4"])
+        uploaded_file = st.file_uploader("Select MP4 Video", type=["mp4"])
         if uploaded_file:
             with open("temp_upload.mp4", "wb") as f:
                 f.write(uploaded_file.getbuffer())
             video_path = "temp_upload.mp4"
-            st.video(uploaded_file)
+            st.success(f"Video Uploaded: {uploaded_file.name}")
     else:
-        url = st.text_input("Paste Link (Google Drive or YouTube)")
+        url = st.text_input("Paste Link Here")
         if url:
             video_path = url
             is_url = True
@@ -109,110 +115,149 @@ with st.sidebar:
                 st.caption("✅ YouTube Link Detected")
 
     st.markdown("---")
-    analyze_btn = st.button("🚀 Generate Grading Report", type="primary")
+    analyze_btn = st.button("🚀 Start Analysis", type="primary", use_container_width=True)
+    st.caption("Powered by ModalX Engine v2.1")
 
 if analyze_btn:
     if not video_path or not s_name:
         st.error("⚠️ Please enter Student Name and Provide a Video first.")
     else:
         if 'modalx' not in st.session_state:
-            with st.spinner("Initializing Grading Engine..."):
+            with st.spinner("⚡ Booting AI Engine..."):
                 st.session_state.modalx = ModalXSystem()
 
-        progress = st.progress(0)
-        status = st.empty()
+        proc_col1, proc_col2 = st.columns([1, 1])
         
-        status.text("🔍 Analyzing Verbal Delivery...")
-        progress.progress(30)
-        time.sleep(0.5)
-        
-        status.text("👁️ Assessing Body Language & Eye Contact...")
-        progress.progress(70)
-        
-        try:
-            results = st.session_state.modalx.analyze(video_path, s_name, s_id, is_url)
-            progress.progress(100)
-            status.empty()
-            
-            if not results:
-                st.error("Analysis Failed. Check the link or file permissions.")
+        with proc_col1:
+            st.info("🎥 Source Stream")
+            if is_url:
+                st.markdown(f"**Analyzing Link:** `{url}`")
+                st.image("https://upload.wikimedia.org/wikipedia/commons/1/14/Video_icon_2.svg", width=100)
             else:
-                score = results['score']
+                st.video(video_path)
+
+        with proc_col2:
+            with st.status("🚀 ModalX Engine Running...", expanded=True) as status:
+                st.write("🔄 Initializing Neural Networks...")
+                time.sleep(1)
                 
-                grade = "F"
-                grade_bg = "#dc3545"
-                if score >= 80: grade, grade_bg = "A+", "#198754"
-                elif score >= 75: grade, grade_bg = "A", "#20c997"
-                elif score >= 70: grade, grade_bg = "A-", "#0dcaf0"
-                elif score >= 65: grade, grade_bg = "B+", "#ffc107"
-                elif score >= 60: grade, grade_bg = "B", "#fd7e14"
-                elif score >= 50: grade, grade_bg = "C", "#d63384"
-
-                c1, c2, c3 = st.columns([1, 1, 2])
-                with c1:
-                    st.metric("Final Score", f"{score}/100")
-                with c2:
-                    st.markdown(f"""
-                    <div style="background-color:{grade_bg}; padding:15px; border-radius:10px; text-align:center; box-shadow: 0 0 15px {grade_bg};">
-                        <h4 style="margin:0; color:white !important; font-size:1rem;">Grade</h4>
-                        <h1 style="margin:0; font-size: 3rem; color:white !important; text-shadow: 0 2px 4px rgba(0,0,0,0.3);">{grade}</h1>
-                    </div>
-                    """, unsafe_allow_html=True)
-                with c3:
-                    st.info(f"**Assessment for:** {s_name} ({s_id})")
-                    st.caption("Graded on: Pacing, Pitch, Fillers, Eye Contact, Posture.")
-
-                st.divider()
-
-                st.subheader("📊 Rubric Evaluation")
+                st.write("🔊 Extracting Audio Layer...")
+                st.write("🧠 Running Whisper (Speech-to-Text)...")
                 
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.markdown("### 🗣️ Verbal Delivery")
+                try:
+                    results = st.session_state.modalx.analyze(video_path, s_name, s_id, is_url)
+                    
+                    if results:
+                        st.write("👁️ Scanning Visual Frames (Face/Slide Detection)...")
+                        st.write("📊 Calculating Rubric Scores...")
+                        time.sleep(0.5)
+                        status.update(label="✅ Analysis Complete!", state="complete", expanded=False)
+                except Exception as e:
+                    st.error(f"Engine Error: {e}")
+                    status.update(label="❌ Analysis Failed", state="error")
+                    results = None
+
+        if results:
+            st.divider()
+            st.balloons()
+
+            score = results['score']
+            grade = "F"
+            grade_bg = "#dc3545"
+            if score >= 80: grade, grade_bg = "A+", "#198754"
+            elif score >= 75: grade, grade_bg = "A", "#20c997"
+            elif score >= 70: grade, grade_bg = "A-", "#0dcaf0"
+            elif score >= 65: grade, grade_bg = "B+", "#ffc107"
+            elif score >= 60: grade, grade_bg = "B", "#fd7e14"
+            elif score >= 50: grade, grade_bg = "C", "#d63384"
+
+            c1, c2, c3 = st.columns([1.5, 1.5, 3])
+            
+            with c1:
+                st.metric("Final Score", f"{score}/100", delta=f"{score-70} vs Avg")
+            
+            with c2:
+                st.markdown(f"""
+                <div style="background-color:{grade_bg}; padding:10px; border-radius:10px; text-align:center; box-shadow: 0 0 15px {grade_bg}80;">
+                    <p style="margin:0; font-size:0.9rem; color:white;">Official Grade</p>
+                    <h1 style="margin:0; font-size: 2.5rem; color:white; font-weight:800;">{grade}</h1>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            with c3:
+                st.markdown(f"### 👤 {s_name}")
+                st.caption(f"Student ID: {s_id}")
+                st.info("Grading Logic: Weighted average of Speech Clarity (60%) and Visual Engagement (40%).")
+
+            st.divider()
+
+            tab1, tab2 = st.tabs(["📊 Performance Metrics", "📝 Transcript & Feedback"])
+            
+            with tab1:
+                col_a, col_b = st.columns(2)
+                
+                with col_a:
+                    st.subheader("🗣️ Audio Intelligence")
                     audio = results['metrics']['audio']
                     
-                    st.write(f"**Pace:** {audio['wpm']} WPM")
-                    st.progress(min(audio['wpm']/150, 1.0))
+                    st.write(f"**Speaking Pace** ({audio['wpm']} WPM)")
+                    st.progress(float(min(audio['wpm']/160, 1.0)))
                     
-                    st.write(f"**Intonation:** {audio['physics']['pitch_variation']}")
-                    st.progress(min(audio['physics']['pitch_variation']/50, 1.0))
+                    st.write(f"**Tonal Variation** (Score: {audio['physics']['pitch_variation']})")
+                    st.progress(float(min(audio['physics']['pitch_variation']/50, 1.0)))
                     
-                    st.metric("Filler Words", audio['filler_count'])
+                    st.write(f"**Confidence (Volume)** (Score: {audio['physics']['volume_score']})")
+                    st.progress(float(min(audio['physics']['volume_score']/100, 1.0)))
                     
-                with col2:
-                    st.markdown("### 👁️ Non-Verbal")
+                    if audio['filler_count'] > 3:
+                        st.warning(f"⚠️ High Filler Words Detected: {audio['filler_count']}")
+                    else:
+                        st.success(f"✅ Low Filler Words: {audio['filler_count']}")
+
+                with col_b:
                     visual = results['metrics']['visual']
                     
-                    st.write(f"**Eye Contact:** {visual['eye_contact_score']}%")
-                    st.progress(visual['eye_contact_score']/100)
-                    
-                    st.write(f"**Posture:** {visual['posture_score']}%")
-                    st.progress(visual['posture_score']/100)
+                    if visual['is_slide_mode']:
+                        st.subheader("🖼️ Slide Design AI")
+                        st.info("Scanner Mode: Slide Presentation")
+                        slides = results['metrics']['slides']
+                        
+                        st.metric("Word Density", f"{slides['avg_words_per_slide']} words/slide")
+                        st.write("**Readability Score**")
+                        st.progress(float(min(slides['readability_score']/100, 1.0)))
+                        st.write(f"**Slide Transitions Detected:** {slides['slide_changes']}")
+                    else:
+                        st.subheader("👁️ Behavioral AI")
+                        st.info("Scanner Mode: Presenter Face")
+                        
+                        st.write(f"**Eye Contact Consistency** ({visual['eye_contact_score']}%)")
+                        st.progress(float(visual['eye_contact_score']/100))
+                        
+                        st.write(f"**Posture Stability** ({visual['posture_score']}%)")
+                        st.progress(float(visual['posture_score']/100))
 
-                st.divider()
-
-                c_left, c_right = st.columns([2, 1])
-                with c_left:
-                    with st.expander("📝 View Transcript (Plagiarism Check)"):
-                        st.text_area("Full Text", results['metrics']['audio']['transcript'], height=200)
+            with tab2:
+                fb_col1, fb_col2 = st.columns([2, 1])
                 
-                with c_right:
-                    st.markdown("### 📥 Save Report")
+                with fb_col1:
+                    st.markdown("### 🤖 AI Recommendations")
+                    for item in results['feedback']:
+                        st.warning(f"👉 {item}")
+                    
+                    st.markdown("### 📄 Speech Transcript")
+                    st.text_area("Full Transcript", results['metrics']['audio']['transcript'], height=150)
+
+                with fb_col2:
+                    st.markdown("### 📥 Official Report")
+                    st.write("Download the verified PDF report for faculty submission.")
+                    
                     if results['report']:
                         st.download_button(
-                            label="Download Official PDF Result",
+                            label="📄 Download PDF Report",
                             data=results['report'],
-                            file_name=f"Evaluation_{s_id}.pdf",
+                            file_name=f"ModalX_Report_{s_id}.pdf",
                             mime="application/pdf"
                         )
-                    else:
-                        st.error("Report generation failed.")
 
-            if video_path and os.path.exists(video_path):
-                os.remove(video_path)
-                print(f"🗑️ Cleaned up temporary video: {video_path}")
-
-        except Exception as e:
-            st.error(f"Error: {e}")
             if video_path and os.path.exists(video_path):
                 os.remove(video_path)
