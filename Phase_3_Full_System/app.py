@@ -3,7 +3,6 @@ import time
 import os
 from backend import ModalXSystem
 
-# --- PAGE CONFIGURATION ---
 st.set_page_config(
     page_title="DIU Presentation Grader",
     page_icon="🎓",
@@ -11,16 +10,13 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- CUSTOM CSS (DARK MODE & HIGH CONTRAST) ---
 st.markdown("""
     <style>
-    /* 1. Force Dark Background & White Text */
     .stApp {
         background-color: #0E1117;
         color: #FAFAFA;
     }
     
-    /* 2. Text Visibility Fixes */
     h1, h2, h3, h4, h5, h6, p, li, span {
         color: #FAFAFA !important;
     }
@@ -28,7 +24,6 @@ st.markdown("""
         color: #E0E0E0 !important;
     }
     
-    /* 3. Header Gradient */
     .main-header {
         background: linear-gradient(90deg, #4b6cb7 0%, #182848 100%);
         padding: 20px;
@@ -39,7 +34,6 @@ st.markdown("""
         box-shadow: 0 4px 15px rgba(0,0,0,0.5);
     }
     
-    /* 4. Metric Cards */
     div[data-testid="stMetric"] {
         background-color: #262730;
         border: 1px solid #444;
@@ -54,14 +48,12 @@ st.markdown("""
     div[data-testid="stMetric"] label { color: #AAAAAA !important; }
     div[data-testid="stMetric"] div[data-testid="stMetricValue"] { color: #FFFFFF !important; }
 
-    /* 5. Inputs */
     .stTextInput input {
         background-color: #262730;
         color: white;
         border: 1px solid #444;
     }
     
-    /* 6. Download Button */
     div.stDownloadButton > button {
         background: linear-gradient(45deg, #198754, #20c997);
         color: white !important;
@@ -78,7 +70,6 @@ st.markdown("""
         transform: translateY(-1px);
     }
 
-    /* 7. Sidebar */
     [data-testid="stSidebar"] {
         background-color: #161a24;
         border-right: 1px solid #333;
@@ -86,10 +77,8 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- HEADER ---
 st.markdown('<div class="main-header"><h1>🎓 DIU Smart Faculty Grader</h1><p>Automated Presentation Assessment System</p></div>', unsafe_allow_html=True)
 
-# --- SIDEBAR: STUDENT INFO ---
 with st.sidebar:
     st.header("📋 Student Details")
     s_name = st.text_input("Student Name", placeholder="e.g. Muntasir Islam")
@@ -97,7 +86,6 @@ with st.sidebar:
     st.markdown("---")
     
     st.header("📂 Evidence Upload")
-    # UPDATED LABEL HERE
     input_method = st.radio("Source:", ["Upload Video File", "Google Drive / YouTube Link"])
     
     video_path = None
@@ -111,7 +99,6 @@ with st.sidebar:
             video_path = "temp_upload.mp4"
             st.video(uploaded_file)
     else:
-        # UPDATED INPUT LABEL HERE
         url = st.text_input("Paste Link (Google Drive or YouTube)")
         if url:
             video_path = url
@@ -124,7 +111,6 @@ with st.sidebar:
     st.markdown("---")
     analyze_btn = st.button("🚀 Generate Grading Report", type="primary")
 
-# --- MAIN DASHBOARD ---
 if analyze_btn:
     if not video_path or not s_name:
         st.error("⚠️ Please enter Student Name and Provide a Video first.")
@@ -133,7 +119,6 @@ if analyze_btn:
             with st.spinner("Initializing Grading Engine..."):
                 st.session_state.modalx = ModalXSystem()
 
-        # Progress Animation
         progress = st.progress(0)
         status = st.empty()
         
@@ -145,7 +130,6 @@ if analyze_btn:
         progress.progress(70)
         
         try:
-            # PASS STUDENT INFO HERE
             results = st.session_state.modalx.analyze(video_path, s_name, s_id, is_url)
             progress.progress(100)
             status.empty()
@@ -153,20 +137,17 @@ if analyze_btn:
             if not results:
                 st.error("Analysis Failed. Check the link or file permissions.")
             else:
-                # --- GRADING RESULT ---
                 score = results['score']
                 
-                # Calculate Grade Colors
                 grade = "F"
-                grade_bg = "#dc3545" # Red
-                if score >= 80: grade, grade_bg = "A+", "#198754" # Green
+                grade_bg = "#dc3545"
+                if score >= 80: grade, grade_bg = "A+", "#198754"
                 elif score >= 75: grade, grade_bg = "A", "#20c997"
-                elif score >= 70: grade, grade_bg = "A-", "#0dcaf0" # Cyan
-                elif score >= 65: grade, grade_bg = "B+", "#ffc107" # Yellow
-                elif score >= 60: grade, grade_bg = "B", "#fd7e14" # Orange
-                elif score >= 50: grade, grade_bg = "C", "#d63384" # Pink
+                elif score >= 70: grade, grade_bg = "A-", "#0dcaf0"
+                elif score >= 65: grade, grade_bg = "B+", "#ffc107"
+                elif score >= 60: grade, grade_bg = "B", "#fd7e14"
+                elif score >= 50: grade, grade_bg = "C", "#d63384"
 
-                # 1. Top Section: Grade Card
                 c1, c2, c3 = st.columns([1, 1, 2])
                 with c1:
                     st.metric("Final Score", f"{score}/100")
@@ -183,7 +164,6 @@ if analyze_btn:
 
                 st.divider()
 
-                # 2. Rubric Breakdown
                 st.subheader("📊 Rubric Evaluation")
                 
                 col1, col2 = st.columns(2)
@@ -211,7 +191,6 @@ if analyze_btn:
 
                 st.divider()
 
-                # 3. Faculty Tools & Download
                 c_left, c_right = st.columns([2, 1])
                 with c_left:
                     with st.expander("📝 View Transcript (Plagiarism Check)"):
@@ -219,19 +198,21 @@ if analyze_btn:
                 
                 with c_right:
                     st.markdown("### 📥 Save Report")
-                    # FIX: Read the file binary safely
-                    try:
-                        with open(results['report'], "rb") as f:
-                            file_data = f.read()
-                            
+                    if results['report']:
                         st.download_button(
                             label="Download Official PDF Result",
-                            data=file_data,
+                            data=results['report'],
                             file_name=f"Evaluation_{s_id}.pdf",
                             mime="application/pdf"
                         )
-                    except Exception as e:
-                        st.error(f"PDF Generation Error: {str(e)}")
+                    else:
+                        st.error("Report generation failed.")
+
+            if video_path and os.path.exists(video_path):
+                os.remove(video_path)
+                print(f"🗑️ Cleaned up temporary video: {video_path}")
 
         except Exception as e:
             st.error(f"Error: {e}")
+            if video_path and os.path.exists(video_path):
+                os.remove(video_path)

@@ -1,9 +1,7 @@
 import os
 
-# --- 1. FORCE FFMPEG PATH ---
 os.environ["FFMPEG_BINARY"] = "/usr/bin/ffmpeg"
 os.environ["IMAGEIO_FFMPEG_EXE"] = "/usr/bin/ffmpeg"
-# ----------------------------
 
 import re
 import cv2
@@ -13,34 +11,25 @@ import yt_dlp
 import librosa
 import numpy as np
 import mediapipe as mp
-import gdown  # NEW LIBRARY
+import gdown
 from moviepy.editor import VideoFileClip
 from transformers import pipeline
 from fpdf import FPDF
 from datetime import datetime
 
-# --- CONFIGURATION ---
 DEVICE = "cpu"
-print(f"🚀 ModalX Backend initialized on: {DEVICE}")
+print(f"ModalX Backend initialized on: {DEVICE}")
 
-# --- HELPER: VIDEO DOWNLOADER (POWERED BY GDOWN) ---
 class VideoDownloader:
     @staticmethod
     def download_from_url(url, output_filename="input_video.mp4"):
-        # 1. Google Drive Logic (Robust)
         if "drive.google.com" in url:
-            print(f"📥 Downloading from Google Drive: {url}")
             try:
-                # fuzzy=True allows gdown to extract ID from 'view' links
-                # quiet=False shows progress in logs
                 download_path = gdown.download(url, output_filename, quiet=False, fuzzy=True)
                 return download_path if download_path else None
             except Exception as e:
-                print(f"❌ Google Drive Error: {e}")
                 return None
         
-        # 2. YouTube/Other Logic
-        print(f"📥 Downloading via yt-dlp: {url}")
         ydl_opts = {
             'format': 'best[ext=mp4]/best',
             'outtmpl': output_filename,
@@ -53,18 +42,41 @@ class VideoDownloader:
                 ydl.download([url])
             return output_filename if os.path.exists(output_filename) else None
         except Exception as e:
-            print(f"❌ YouTube Download Error: {e}")
             return None
 
-# --- PHASE 1: AUDIO INTELLIGENCE ---
 class SpeechAnalyzer:
     def __init__(self):
-        print("⏳ Loading Whisper...")
         self.whisper_model = whisper.load_model("tiny", device=DEVICE)
         try:
             self.sentiment_pipeline = pipeline("sentiment-analysis", model="distilbert-base-uncased-finetuned-sst-2-english")
         except:
             self.sentiment_pipeline = None
+
+    def analyze_prosody(self, audio_path):
+        y, sr = librosa.load(audio_path)
+        
+        rms = librosa.feature.rms(y=y)[0]
+        avg_volume = np.mean(rms)
+        vol_score = min(max(avg_volume / 0.05, 0), 1) * 100 
+        
+        non_silent_intervals = librosa.effects.split(y, top_db=25)
+        total_duration = librosa.get_duration(y=y, sr=sr)
+        non_silent_duration = sum([(end - start) / sr for start, end in non_silent_intervals])
+        
+        pause_ratio = 1.0 - (non_silent_duration / total_duration) if total_duration > 0 else 0
+        
+        pitches, magnitudes = librosa.piptrack(y=y, sr=sr)
+        mask = magnitudes > np.median(magnitudes)
+        active_pitches = pitches[mask]
+        valid_pitches = active_pitches[(active_pitches > 70) & (active_pitches < 400)]
+        
+        pitch_std = np.std(valid_pitches) if len(valid_pitches) > 0 else 0
+        
+        return {
+            "volume_score": round(vol_score, 1),
+            "pause_ratio": round(pause_ratio * 100, 1),
+            "pitch_variation": round(float(pitch_std), 2)
+        }
 
     def process_audio(self, video_path):
         audio_path = "temp_audio.wav"
@@ -74,42 +86,44 @@ class SpeechAnalyzer:
             video.audio.write_audiofile(audio_path, codec='pcm_s16le', verbose=False, logger=None)
             video.close()
         except Exception as e:
-            print(f"Audio Extraction Failed: {e}")
             return None
 
         try:
             result = self.whisper_model.transcribe(audio_path)
-            text = result["text"]
+            transcript = result["text"]
             
-            words = text.split()
+            words = transcript.split()
             wpm = round(len(words) / (duration / 60), 1) if duration > 0 else 0
             
-            fillers = ["um", "uh", "like", "actually", "basically", "literally"]
+            fillers = ["um", "uh", "like", "actually", "basically", "literally", "so"]
             filler_count = sum(1 for w in words if re.sub(r'[^\w]', '', w.lower()) in fillers)
             
-            y, sr = librosa.load(audio_path)
-            pitches, magnitudes = librosa.piptrack(y=y, sr=sr)
-            pitches = pitches[magnitudes > np.median(magnitudes)]
-            pitches = pitches[pitches > 0]
-            pitch_std = np.std(pitches) if len(pitches) > 0 else 0
+            physics = self.analyze_prosody(audio_path)
             
+            stopwords = set(["the", "and", "is", "of", "to", "a", "in", "that", "it", "for", "on", "with", "as", "was", "at", "um", "uh", "like", "actually", "so", "you", "my"])
+            clean_words = [w.lower() for w in re.findall(r'\b\w+\b', transcript) if len(w) > 3]
+            word_counts = {}
+            for w in clean_words:
+                if w not in stopwords:
+                    word_counts[w] = word_counts.get(w, 0) + 1
+            topics = [k.title() for k, v in sorted(word_counts.items(), key=lambda item: item[1], reverse=True)[:5]]
+
             if os.path.exists(audio_path): os.remove(audio_path)
 
             return {
-                "transcript": text,
+                "transcript": transcript,
                 "wpm": wpm,
                 "filler_count": filler_count,
-                "physics": {"pitch_variation": round(float(pitch_std), 2)}
+                "physics": physics,
+                "topics": topics
             }
+
         except Exception as e:
-            print(f"Audio Processing Error: {e}")
             if os.path.exists(audio_path): os.remove(audio_path)
             return None
 
-# --- PHASE 2: VISUAL INTELLIGENCE ---
 class VisualAnalyzer:
     def __init__(self):
-        print("👁️ Loading MediaPipe...")
         self.mp_holistic = mp.solutions.holistic
         self.holistic = self.mp_holistic.Holistic(min_detection_confidence=0.5, min_tracking_confidence=0.5)
 
@@ -157,7 +171,6 @@ class VisualAnalyzer:
             "hand_score": 50
         }
 
-# --- PHASE 3: FACULTY GRADING ENGINE ---
 class ModalXSystem:
     def __init__(self):
         self.audio_engine = SpeechAnalyzer()
@@ -167,30 +180,43 @@ class ModalXSystem:
         score = 100
         feedback = []
 
-        if audio['wpm'] < 120:
+        pause_ratio = audio['physics']['pause_ratio']
+        wpm = audio['wpm']
+        
+        if wpm < 110:
+            if pause_ratio > 30:
+                score -= 10
+                feedback.append("Frequent hesitations detected. Try to flow more smoothly.")
+            else:
+                score -= 5
+                feedback.append("Speaking pace is slow. Try to increase energy.")
+        elif wpm > 170:
             score -= 10
-            feedback.append("Speaking too slow. Aim for 130-150 words/min.")
-        elif audio['wpm'] > 170:
-            score -= 10
-            feedback.append("Speaking too fast. Slow down for clarity.")
+            feedback.append("Speaking very fast. Ensure you aren't rushing.")
         else:
             feedback.append("Good speaking pace.")
 
-        if audio['physics']['pitch_variation'] < 20:
+        vol = audio['physics']['volume_score']
+        if vol < 30:
             score -= 10
-            feedback.append("Voice is monotone. Vary your pitch more.")
+            feedback.append("Volume is low. Project your voice for better confidence.")
         
-        if audio['filler_count'] > 5:
+        pitch_var = audio['physics']['pitch_variation']
+        if pitch_var < 15:
+            score -= 10
+            feedback.append("Voice sounds monotone. Vary your pitch to keep interest.")
+        
+        if audio['filler_count'] > 6:
             score -= 5
             feedback.append(f"Detected {audio['filler_count']} filler words. Pause instead.")
 
         if visual['eye_contact_score'] < 60:
             score -= 10
-            feedback.append("Low eye contact. Look at the camera/audience more.")
+            feedback.append("Low eye contact. Look at the camera.")
         
         if visual['posture_score'] < 80:
             score -= 5
-            feedback.append("Check your posture. Keep shoulders level.")
+            feedback.append("Improve posture. Keep shoulders steady.")
 
         return max(0, score), feedback
 
@@ -198,14 +224,12 @@ class ModalXSystem:
         pdf = FPDF()
         pdf.add_page()
         
-        # Header
         pdf.set_font("Arial", "B", 20)
         pdf.cell(0, 20, "Presentation Assessment Report", ln=True, align="C")
         pdf.set_font("Arial", "", 12)
         pdf.cell(0, 10, "DIU Smart Faculty Grader", ln=True, align="C")
         pdf.line(10, 35, 200, 35)
         
-        # Student Info
         pdf.ln(10)
         pdf.set_font("Arial", "B", 12)
         pdf.cell(40, 10, f"Student Name:", border=0)
@@ -218,7 +242,6 @@ class ModalXSystem:
         pdf.cell(40, 10, f"Date:", border=0)
         pdf.cell(0, 10, f"{datetime.now().strftime('%Y-%m-%d %H:%M')}", ln=True)
 
-        # Grading Logic
         letter_grade = "F"
         if score >= 80: letter_grade = "A+ (Outstanding)"
         elif score >= 75: letter_grade = "A (Excellent)"
@@ -227,7 +250,6 @@ class ModalXSystem:
         elif score >= 60: letter_grade = "B (Satisfactory)"
         else: letter_grade = "C (Needs Improvement)"
 
-        # Score Box
         pdf.ln(10)
         pdf.set_fill_color(240, 240, 240)
         pdf.rect(10, pdf.get_y(), 190, 30, 'F')
@@ -236,7 +258,6 @@ class ModalXSystem:
         pdf.set_font("Arial", "B", 18)
         pdf.cell(0, 15, f"Grade: {letter_grade}", ln=True, align="C")
         
-        # Metrics Table
         pdf.ln(10)
         pdf.set_font("Arial", "B", 14)
         pdf.cell(0, 10, "Performance Metrics:", ln=True)
@@ -254,7 +275,6 @@ class ModalXSystem:
         pdf.cell(100, 10, "Eye Contact", border=1)
         pdf.cell(90, 10, f"{metrics['visual']['eye_contact_score']}%", border=1, ln=True)
         
-        # Feedback
         pdf.ln(10)
         pdf.set_font("Arial", "B", 14)
         pdf.cell(0, 10, "Faculty Feedback:", ln=True)
@@ -263,9 +283,16 @@ class ModalXSystem:
             clean_tip = tip.encode('latin-1', 'ignore').decode('latin-1')
             pdf.multi_cell(0, 8, f"- {clean_tip}")
 
-        filename = f"Evaluation_{student_id}.pdf"
-        pdf.output(filename)
-        return filename
+        temp_filename = f"temp_{student_id}_{datetime.now().timestamp()}.pdf"
+        pdf.output(temp_filename)
+        
+        with open(temp_filename, "rb") as f:
+            pdf_bytes = f.read()
+            
+        if os.path.exists(temp_filename):
+            os.remove(temp_filename)
+            
+        return pdf_bytes
 
     def analyze(self, input_path, student_name="Unknown", student_id="000", is_url=False):
         video_path = input_path
@@ -282,7 +309,7 @@ class ModalXSystem:
         score, feedback = self.calculate_score(audio_res, visual_res)
         all_metrics = {"audio": audio_res, "visual": visual_res}
         
-        report_path = self.generate_pdf(all_metrics, score, feedback, student_name, student_id)
+        report_bytes = self.generate_pdf(all_metrics, score, feedback, student_name, student_id)
 
         if is_url and os.path.exists(video_path): os.remove(video_path)
 
@@ -290,5 +317,5 @@ class ModalXSystem:
             "score": score,
             "metrics": all_metrics,
             "feedback": feedback,
-            "report": report_path
+            "report": report_bytes
         }
