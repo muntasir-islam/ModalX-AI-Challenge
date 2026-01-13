@@ -1,38 +1,54 @@
-# 🚀 ModalX-AI: Multi-Modal Presentation Assessment System
-**Daffodil AI Club - ModalX Challenge Submission**
+# 🎓 ModalX: The Smart Faculty Grading Assistant
+**AI-Powered Presentation Assessment System**
 
-## 📖 Project Overview
-ModalX is an AI-powered grading assistant designed to help Faculty members evaluate student presentations objectively. By analyzing both **Audio (Verbal)** and **Visual (Non-Verbal)** cues, it generates a comprehensive "report card" with actionable feedback.
-
----
-
-## ⚙️ Development Phases
-
-### 🔹 Phase 1: Speech Analysis (Audio Intelligence)
-*Located in `/Phase_1_Speech_Analysis`*
-- **Goal:** Extract raw audio from video and analyze verbal delivery.
-- **Tech Stack:** `OpenAI Whisper` (ASR), `Librosa` (Signal Processing).
-- **Key Metrics:** Words Per Minute (WPM), Pitch/Tonal Variation, Filler Word Detection.
-
-### 🔹 Phase 2: Motion & Visual Analysis (Behavioral AI)
-*Located in `/Phase_2_Visual_Analysis`*
-- **Goal:** Track body language and engagement.
-- **Tech Stack:** `Google MediaPipe` (Holistic Model), `OpenCV`.
-- **Key Metrics:** Eye Contact Consistency, Posture Stability, Hand Gesture tracking.
-
-### 🔹 Phase 3: Full System Integration (The Product)
-*Located in `/Phase_3_Full_System`*
-- **Goal:** Merge Phase 1 & 2 into a faculty-facing SaaS tool.
-- **Features:**
-    - 📄 **Smart Report Generation:** Auto-generates PDFs with Grades (A+, B, etc.).
-    - 🔗 **Google Drive Support:** Fetches videos directly via `gdown`.
-    - 🙋 **Viva Question Generator:** Suggests questions based on speech content.
-- **UI:** Built with `Streamlit` for a clean, responsive dashboard.
+> 🔴 **Live Demo:** [ml.muntasirislam.com/modalx](https://ml.muntasirislam.com/modalx)
 
 ---
 
-## 🛠️ Installation & Setup
-1. Clone the repository.
-2. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
+## 💡 The Problem We Are Solving
+Faculty members and lecturers face a massive challenge: **Grading Fatigue.**
+
+Imagine sitting through 50 student presentations in a single day. By the 40th student, it becomes incredibly difficult to remain objective, track every pause, or measure eye contact accurately. Grading becomes subjective, and providing detailed, personalized feedback for every single student is nearly impossible due to time constraints.
+
+**ModalX is built to be the Lecturer's "Helping Hand".**
+It automates the tedious parts of grading (measuring pace, volume, slide density, and posture) so the faculty member can focus on what matters most: the **content and the idea**.
+
+---
+
+## ⚙️ How It Helps the Faculty
+We designed this system to act as an objective, "Responsible AI" grader that follows a standard rubric.
+
+### 1. Automated Rubric & Evidence
+Instead of just giving a grade like "B+", ModalX generates a **Detailed PDF Report** for every student. This serves as:
+* **Proof of Assessment:** A physical record of why a student received a specific grade.
+* **Objectivity:** The AI doesn't get tired. It grades the first student and the last student with the exact same criteria.
+
+### 2. The "Context-Aware" Grading Engine
+Lecturers encounter different types of presentations. A "One-size-fits-all" AI fails here. We built a **"Smart Pivot"** engine that adapts:
+
+* **Scenario A: The Speech.** If the student is on camera, the AI uses `MediaPipe` to grade **Eye Contact** and **Posture Stability**.
+* **Scenario B: The Screen Share.** If the student is showing slides (and their face is hidden), the AI automatically switches to **OCR Mode**. It reads the slides using `Tesseract` to check for **Readability** and **Text Density** (avoiding "Death by PowerPoint").
+
+### 3. Deep Audio Forensics
+We go beyond simple transcription.
+* **Confidence scoring:** Using RMS Energy to detect mumbling vs. projection.
+* **Hesitation Analysis:** Distinguishing between a "Dramatic Pause" (good) and "Nervous Stuttering" (needs improvement).
+
+---
+
+## 📂 Project Architecture (Phase by Phase)
+This repository documents our development journey for the ModalX AI Challenge:
+
+* **`Phase_1_Speech_Analysis/`**: The core audio processing logic. We built the "Prosody Engine" here to measure pitch and pacing.
+* **`Phase_2_Visual_Analysis/`**: The computer vision layer. This contains the logic for the "Smart Pivot" (Face vs. Slide detection).
+* **`Phase_3_Full_System/`**: The production-ready web application hosted on the live server.
+
+---
+
+## 🛠️ Deployment & Usage
+The project is currently hosted live, but you can run a local instance for testing.
+
+**1. Clone & Install**
+```bash
+git clone [https://github.com/muntasir-islam/ModalX-Repo.git](https://github.com/muntasir-islam/ModalX-Repo.git)
+pip install -r requirements.txt
