@@ -50,5 +50,5 @@ The project is currently hosted live, but you can run a local instance for testi
 
 **1. Clone & Install**
 ```bash
-git clone https://github.com/muntasir-islam/ModalX-Repo.git
+git clone https://github.com/muntasir-islam/ModalX-AI-Challenge.git
 pip install -r requirements.txt
