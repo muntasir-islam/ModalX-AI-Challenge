@@ -1,9 +1,9 @@
 # ModalX-AI Challenge: Presentation Assessment System
 
-**Team Name:** NL Circuits
-**Team Members:** Muntasir Islam, Nazmus Sakib
-**Student IDs:** 0242220005131010, 0242220005131017
-**Event:** ModalX-AI Challenge (Daffodil International University)
+* **Team Name:** NL Circuits
+* **Team Members:** Muntasir Islam, Nazmus Sakib
+* **Student IDs:** 0242220005131010, 0242220005131017
+* **Event:** ModalX-AI Challenge (Daffodil International University)
 
 ---
 
