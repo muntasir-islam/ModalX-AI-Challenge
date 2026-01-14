@@ -28,6 +28,8 @@ This folder contains the logic for processing audio.
     * **Pitch Variation:** detects if the voice is monotone.
     * **Pause Ratio:** measures hesitation.
     * **Emotion Analysis:** detects emotions and measures confidence scales.
+    * **Emotion detection Model Training:** dataset from [text](https://www.kaggle.com/datasets/ejlok1/toronto-emotional-speech-set-tess)
+
 * **Tech Stack:** OpenAI Whisper, Librosa, TensorFlow.
 
 ### 2. Phase_2_Visual_Analysis
