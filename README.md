@@ -46,7 +46,7 @@ This is the final integrated application. It combines Phase 1 and Phase 2, adds 
     * **Emotion Engine:** A CNN model that detects happy, nervous, or neutral tones.
     * **Content Analysis:** Scans the transcript for professional vocabulary.
     * **PDF Report:** Automatically generates a scorecard with a final grade.
-* **Main File:** `app.py` (Streamlit Dashboard).
+* **Main File:** `app.py` (Streamlit Dashboard). `backend.py` (All algorithms and processing)
 
 ---
 
