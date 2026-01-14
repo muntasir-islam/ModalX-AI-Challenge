@@ -1,7 +1,10 @@
 import streamlit as st
 import time
 import os
+import pandas as pd
+import plotly.express as px
 from backend import ModalXSystem
+from emotion_engine import EmotionAnalyzer
 
 st.set_page_config(
     page_title="DIU Presentation Grader",
@@ -12,17 +15,9 @@ st.set_page_config(
 
 st.markdown("""
     <style>
-    .stApp {
-        background-color: #0E1117;
-        color: #FAFAFA;
-    }
-    
-    h1, h2, h3, h4, h5, h6, p, li, span {
-        color: #FAFAFA !important;
-    }
-    .stMarkdown, .stText {
-        color: #E0E0E0 !important;
-    }
+    .stApp { background-color: #0E1117; color: #FAFAFA; }
+    h1, h2, h3, h4, h5, h6, p, li, span { color: #FAFAFA !important; }
+    .stMarkdown, .stText { color: #E0E0E0 !important; }
     
     .main-header {
         background: linear-gradient(135deg, #4b6cb7 0%, #182848 100%);
@@ -85,6 +80,10 @@ st.markdown("""
 
 st.markdown('<div class="main-header"><h1>🎓 DIU Smart Faculty Grader</h1><p>AI-Powered Multi-Modal Presentation Assessment</p></div>', unsafe_allow_html=True)
 
+@st.cache_resource
+def load_emotion_engine():
+    return EmotionAnalyzer()
+
 with st.sidebar:
     st.header("📋 Student Details")
     s_name = st.text_input("Student Name", placeholder="e.g. Muntasir Islam")
@@ -126,6 +125,12 @@ if analyze_btn:
             with st.spinner("⚡ Booting AI Engine..."):
                 st.session_state.modalx = ModalXSystem()
 
+        try:
+            emotion_engine = load_emotion_engine()
+        except Exception as e:
+            st.error(f"Could not load Emotion Model: {e}")
+            st.stop()
+
         proc_col1, proc_col2 = st.columns([1, 1])
         
         with proc_col1:
@@ -136,32 +141,45 @@ if analyze_btn:
             else:
                 st.video(video_path)
 
+        results = None
+        emotion_results = None
+        
         with proc_col2:
             with st.status("🚀 ModalX Engine Running...", expanded=True) as status:
                 st.write("🔄 Initializing Neural Networks...")
                 time.sleep(1)
                 
-                st.write("🔊 Extracting Audio Layer...")
-                st.write("🧠 Running Whisper (Speech-to-Text)...")
-                
+                st.write("🧠 Running General Assessment (Whisper + CV)...")
                 try:
                     results = st.session_state.modalx.analyze(video_path, s_name, s_id, is_url)
-                    
-                    if results:
-                        st.write("👁️ Scanning Visual Frames (Face/Slide Detection)...")
-                        st.write("📊 Calculating Rubric Scores...")
-                        time.sleep(0.5)
-                        status.update(label="✅ Analysis Complete!", state="complete", expanded=False)
                 except Exception as e:
-                    st.error(f"Engine Error: {e}")
+                    st.error(f"General Engine Error: {e}")
+                
+                if video_path and os.path.exists(video_path) and not is_url:
+                    st.write("🎭 Analyzing Emotional Tones (CNN-1D)...")
+                    try:
+                        e_times, e_emotions, e_summary = emotion_engine.predict(video_path)
+                        emotion_results = {
+                            "times": e_times, 
+                            "emotions": e_emotions, 
+                            "summary": e_summary
+                        }
+                    except Exception as e:
+                        st.warning(f"Emotion Analysis skipped: {e}")
+                elif is_url:
+                    st.warning("⚠️ Emotion Graph unavailable for external URLs (Download required)")
+                
+                if results:
+                    status.update(label="✅ Analysis Complete!", state="complete", expanded=False)
+                else:
                     status.update(label="❌ Analysis Failed", state="error")
-                    results = None
 
         if results:
             st.divider()
             st.balloons()
 
             score = results['score']
+            
             grade = "F"
             grade_bg = "#dc3545"
             if score >= 80: grade, grade_bg = "A+", "#198754"
@@ -191,7 +209,7 @@ if analyze_btn:
 
             st.divider()
 
-            tab1, tab2 = st.tabs(["📊 Performance Metrics", "📝 Transcript & Feedback"])
+            tab1, tab2, tab3 = st.tabs(["📊 Performance Metrics", "🎭 Emotional Intelligence", "📝 Transcript & Feedback"])
             
             with tab1:
                 col_a, col_b = st.columns(2)
@@ -217,7 +235,7 @@ if analyze_btn:
                 with col_b:
                     visual = results['metrics']['visual']
                     
-                    if visual['is_slide_mode']:
+                    if visual.get('is_slide_mode', False):
                         st.subheader("🖼️ Slide Design AI")
                         st.info("Scanner Mode: Slide Presentation")
                         slides = results['metrics']['slides']
@@ -237,6 +255,52 @@ if analyze_btn:
                         st.progress(float(visual['posture_score']/100))
 
             with tab2:
+                if emotion_results and emotion_results['times']:
+                    st.subheader("📈 Emotional Flow Over Time")
+                    
+                    e_times = emotion_results['times']
+                    e_emotions = emotion_results['emotions']
+                    e_summary = emotion_results['summary']
+                    
+                    df = pd.DataFrame({"Time (s)": e_times, "Emotion": e_emotions})
+                    emotion_order = sorted(list(set(e_emotions)))
+                    
+                    fig = px.scatter(
+                        df, x="Time (s)", y="Emotion", color="Emotion",
+                        size=[15]*len(df), template="plotly_dark",
+                        category_orders={"Emotion": emotion_order},
+                        title="Speaker Emotion Timeline"
+                    )
+                    fig.update_traces(mode='lines+markers', line=dict(width=1, color='gray'))
+                    fig.update_layout(height=400, paper_bgcolor="#0E1117", plot_bgcolor="#0E1117")
+                    st.plotly_chart(fig, use_container_width=True)
+                    
+                    c_pie, c_dom = st.columns([1, 1])
+                    with c_pie:
+                        st.markdown("##### Emotion Distribution")
+                        fig_pie = px.pie(
+                            names=list(e_summary.keys()), 
+                            values=list(e_summary.values()),
+                            hole=0.4, template="plotly_dark"
+                        )
+                        fig_pie.update_layout(paper_bgcolor="#0E1117")
+                        st.plotly_chart(fig_pie, use_container_width=True)
+                    
+                    with c_dom:
+                        dom_emotion = max(e_summary, key=e_summary.get)
+                        st.markdown("##### Analysis")
+                        st.metric("Dominant Tone", dom_emotion.upper())
+                        
+                        if dom_emotion in ['happy', 'neutral', 'surprise', 'surprised']:
+                            st.success("The speaker maintains a **Positive/Confident** tone.")
+                        elif dom_emotion in ['fear', 'sad']:
+                            st.warning("The speaker seems **Nervous or Low Energy**. Needs more enthusiasm.")
+                        elif dom_emotion in ['angry', 'disgust', 'anger']:
+                            st.error("The speaker sounds **Aggressive/Frustrated**. Needs a softer tone.")
+                else:
+                    st.info("Emotion analysis is not available for this file type or URL.")
+
+            with tab3:
                 fb_col1, fb_col2 = st.columns([2, 1])
                 
                 with fb_col1:
@@ -259,5 +323,5 @@ if analyze_btn:
                             mime="application/pdf"
                         )
 
-            if video_path and os.path.exists(video_path):
+            if video_path and os.path.exists(video_path) and not is_url:
                 os.remove(video_path)
