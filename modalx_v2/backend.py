@@ -493,13 +493,17 @@ class ModalXSystemV2:
                 pdf.cell(0, 8, f"(Chart generation error: {e})", ln=True)
         
         # AI Recommendations
-        pdf.ln(5)
+        pdf.add_page()  # Start fresh page
+        pdf.set_left_margin(10)
+        pdf.set_right_margin(10)
         pdf.set_font("Arial", "B", 14)
         pdf.cell(0, 10, "3. AI Recommendations", ln=True)
         
         pdf.set_font("Arial", "", 10)
         for fb in feedback[:10]:  # Limit to 10 items
-            pdf.multi_cell(0, 6, f"- {fb}")
+            # Truncate long feedback to avoid overflow
+            fb_text = fb[:200] if len(fb) > 200 else fb
+            pdf.multi_cell(0, 6, f"- {fb_text}")
         
         # Output PDF
         temp_pdf = f"temp_report_{student_id}.pdf"
