@@ -8,10 +8,13 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 import cv2
-import mediapipe as mp
 from typing import List, Dict, Tuple, Optional
 from collections import deque
 import os
+
+# Lazy import for MediaPipe to avoid TensorFlow conflict
+mp = None
+
 
 
 class SpatialGraphConv(nn.Module):
@@ -287,7 +290,12 @@ class GestureAnalyzer:
         
         self.model.eval()
         
-        # Initialize MediaPipe
+        # Initialize MediaPipe lazily to avoid TensorFlow conflict
+        global mp
+        if mp is None:
+            import mediapipe as _mp
+            mp = _mp
+        
         self.mp_pose = mp.solutions.pose
         self.pose = self.mp_pose.Pose(
             static_image_mode=False,
