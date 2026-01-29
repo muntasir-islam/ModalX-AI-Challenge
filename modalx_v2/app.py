@@ -3,9 +3,14 @@ ModalX v2 - Deep Learning Presentation Grader
 Streamlit Dashboard for AI-Powered Presentation Assessment
 """
 
+# Disable TensorFlow in transformers (must be before any imports)
+import os
+os.environ["USE_TF"] = "0"
+os.environ["USE_TORCH"] = "1"
+os.environ["TRANSFORMERS_NO_TF"] = "1"
+
 import streamlit as st
 import time
-import os
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
