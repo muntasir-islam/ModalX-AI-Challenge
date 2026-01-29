@@ -499,7 +499,7 @@ class ModalXSystemV2:
         
         pdf.set_font("Arial", "", 10)
         for fb in feedback[:10]:  # Limit to 10 items
-            pdf.multi_cell(0, 6, f"• {fb}")
+            pdf.multi_cell(0, 6, f"- {fb}")
         
         # Output PDF
         temp_pdf = f"temp_report_{student_id}.pdf"
