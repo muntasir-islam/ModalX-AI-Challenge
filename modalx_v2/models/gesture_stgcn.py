@@ -244,10 +244,11 @@ class GestureSTGCN(nn.Module):
         """
         batch_size = x.size(0)
         
-        # Input batch norm
-        x_flat = x.view(batch_size, -1, x.size(2))
+        # Input batch norm - use reshape instead of view for non-contiguous tensors
+        x = x.contiguous()
+        x_flat = x.reshape(batch_size, -1, x.size(2))
         x_flat = self.input_bn(x_flat.permute(0, 2, 1)).permute(0, 2, 1)
-        x = x_flat.view_as(x)
+        x = x_flat.reshape(batch_size, x.size(1), x.size(2), x.size(3))
         
         # ST-GCN layers
         for layer in self.layers:
@@ -285,7 +286,7 @@ class GestureAnalyzer:
         self.model = GestureSTGCN().to(self.device)
         
         if model_path and os.path.exists(model_path):
-            self.model.load_state_dict(torch.load(model_path, map_location=self.device, weights_only=False))
+            self.model.load_state_dict(torch.load(model_path, map_location=self.device))
             print(f"Loaded gesture model from {model_path}")
         
         self.model.eval()
