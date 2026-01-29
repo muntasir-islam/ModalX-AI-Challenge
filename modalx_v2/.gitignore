@@ -1,13 +1,13 @@
 # ModalX v2 Git Ignore
 
-# Model weights (too large for GitHub)
-*.pt
-*.pth
-*.h5
-*.onnx
-weights/*.pt
+# Note: .pt files are tracked by Git LFS, not ignored
 
 # Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+*.so
 __pycache__/
 *.py[cod]
 *$py.class
