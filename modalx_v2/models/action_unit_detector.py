@@ -183,7 +183,7 @@ class ActionUnitDetector:
         
         # Load pretrained weights if available
         if model_path and os.path.exists(model_path):
-            checkpoint = torch.load(model_path, map_location=self.device)
+            checkpoint = torch.load(model_path, map_location=self.device, weights_only=False)
             self.au_model.load_state_dict(checkpoint['au_model'])
             self.temporal_model.load_state_dict(checkpoint['temporal_model'])
             print(f"Loaded AU detector from {model_path}")

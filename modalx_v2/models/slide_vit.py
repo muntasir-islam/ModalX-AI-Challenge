@@ -141,7 +141,7 @@ class SlideAnalyzer:
         self.model = SlideViT().to(self.device)
         
         if model_path and os.path.exists(model_path):
-            self.model.load_state_dict(torch.load(model_path, map_location=self.device))
+            self.model.load_state_dict(torch.load(model_path, map_location=self.device, weights_only=False))
             print(f"Loaded slide model from {model_path}")
         
         self.model.eval()

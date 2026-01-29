@@ -204,7 +204,7 @@ class ProsodyAnalyzerV2:
         self.model = ProsodyAnalyzer(sample_rate=self.sample_rate).to(self.device)
         
         if model_path and os.path.exists(model_path):
-            self.model.load_state_dict(torch.load(model_path, map_location=self.device))
+            self.model.load_state_dict(torch.load(model_path, map_location=self.device, weights_only=False))
             print(f"Loaded prosody model from {model_path}")
         
         self.model.eval()

@@ -245,7 +245,7 @@ class EmotionAnalyzerV2:
         
         # Load pretrained weights if available
         if model_path and os.path.exists(model_path):
-            self.model.load_state_dict(torch.load(model_path, map_location=self.device))
+            self.model.load_state_dict(torch.load(model_path, map_location=self.device, weights_only=False))
             print(f"Loaded emotion model from {model_path}")
         else:
             print("Using randomly initialized emotion model (no pretrained weights)")
