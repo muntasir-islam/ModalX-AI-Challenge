@@ -243,12 +243,14 @@ class GestureSTGCN(nn.Module):
             intensity: (batch, 1) movement intensity
         """
         batch_size = x.size(0)
+        C, T, V = x.size(1), x.size(2), x.size(3)
         
-        # Input batch norm - use reshape instead of view for non-contiguous tensors
-        x = x.contiguous()
-        x_flat = x.reshape(batch_size, -1, x.size(2))
-        x_flat = self.input_bn(x_flat.permute(0, 2, 1)).permute(0, 2, 1)
-        x = x_flat.reshape(batch_size, x.size(1), x.size(2), x.size(3))
+        # Input batch norm: (B, C, T, V) -> (B*T, C*V) -> BN -> reshape back
+        x = x.permute(0, 2, 1, 3).contiguous()  # (B, T, C, V)
+        x = x.view(batch_size * T, C * V)  # (B*T, C*V=99)
+        x = self.input_bn(x)  # BatchNorm1d(99)
+        x = x.view(batch_size, T, C, V)  # (B, T, C, V)
+        x = x.permute(0, 2, 1, 3).contiguous()  # Back to (B, C, T, V)
         
         # ST-GCN layers
         for layer in self.layers:
