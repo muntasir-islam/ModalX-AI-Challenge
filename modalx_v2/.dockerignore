@@ -1,0 +1,59 @@
+# .dockerignore for ModalX v2
+
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+.env
+.venv
+env/
+venv/
+*.egg-info/
+.eggs/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# Temp files
+temp/
+*.tmp
+*.temp
+temp_*.mp4
+temp_*.wav
+temp_*.pdf
+temp_*.png
+
+# Local weights (will be mounted as volume)
+# weights/
+
+# Documentation
+*.md
+!README.md
+
+# Training data
+training/datasets/
+*.h5
+*.pt
+*.pth
+
+# Logs
+*.log
+logs/

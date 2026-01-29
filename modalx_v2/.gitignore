@@ -1,0 +1,39 @@
+# ModalX v2 Git Ignore
+
+# Model weights (too large for GitHub)
+*.pt
+*.pth
+*.h5
+*.onnx
+weights/*.pt
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+*.so
+.eggs/
+*.egg-info/
+.env
+.venv/
+venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Temp files
+temp_*.mp4
+temp_*.wav
+temp_*.pdf
+temp_*.png
+*.tmp
+
+# Jupyter
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
+Thumbs.db

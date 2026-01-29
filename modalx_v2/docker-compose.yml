@@ -1,0 +1,37 @@
+# ModalX v2 - Docker Compose Configuration
+# For DigitalOcean App Platform or Droplet deployment
+
+version: '3.8'
+
+services:
+  modalx-v2:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: modalx-v2-app
+    restart: unless-stopped
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./weights:/app/weights
+      - ./temp:/app/temp
+    environment:
+      - PYTHONUNBUFFERED=1
+      - STREAMLIT_SERVER_PORT=8501
+      - STREAMLIT_SERVER_HEADLESS=true
+      - STREAMLIT_BROWSER_GATHER_USAGE_STATS=false
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 2G
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  weights:
+  temp:
